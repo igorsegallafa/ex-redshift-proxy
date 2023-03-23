@@ -56,7 +56,7 @@ defmodule ExRedshiftProxy.MessagesHelper do
     @messages_type |> Map.get(type, :undefined)
   end
 
-  def get_message_length_by_type(:msgNoTag, buffer) when byte_size(buffer) >= 4 do
+  def get_message_length_by_type(:undefined, buffer) when byte_size(buffer) >= 4 do
     <<body_length::binary-size(4), _rest::binary>> = buffer
 
     %MessageLength{
@@ -65,7 +65,7 @@ defmodule ExRedshiftProxy.MessagesHelper do
     }
   end
 
-  def get_message_length_by_type(:msgNoticeResponse, _buffer) do
+  def get_message_length_by_type(:notice_response, _buffer) do
     %MessageLength{
       header_length: 1,
       body_length: 0

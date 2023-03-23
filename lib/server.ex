@@ -40,9 +40,7 @@ defmodule ExRedshiftProxy.Server do
 
   defp serve_upstream(source, destination, buffer \\ <<>>) do
     data = source |> receive_data
-    buffer = handle_message_buffer(buffer <> data)
-
-    :ok = :gen_tcp.send(destination, data)
+    buffer = handle_message_buffer(buffer <> data, destination)
 
     serve_upstream(source, destination, buffer)
   end
@@ -54,17 +52,17 @@ defmodule ExRedshiftProxy.Server do
     serve_downstream(source, destination)
   end
 
-  defp handle_message_buffer(buffer) when byte_size(buffer) >= 1 do
+  defp handle_message_buffer(buffer, destination) when byte_size(buffer) >= 1 do
     message_type = MessagesHelper.get_message_type(buffer)
     message_length_info = MessagesHelper.get_message_length_by_type(message_type, buffer)
 
     # Handle Message from Buffer
-    buffer |> handle_message(message_type, message_length_info.header_length, message_length_info.body_length)
+    buffer |> handle_message(message_type, message_length_info.header_length, message_length_info.body_length, destination)
   end
 
-  defp handle_message_buffer(buffer), do: buffer
+  defp handle_message_buffer(buffer, _), do: buffer
 
-  defp handle_message(buffer, type, header_length, body_length) when byte_size(buffer) >= header_length + body_length do
+  defp handle_message(buffer, type, header_length, body_length, destination) when byte_size(buffer) >= header_length + body_length do
     <<header::binary-size(header_length), rest::binary>> = buffer
     <<body::binary-size(body_length), other::binary>> = rest
 
@@ -72,14 +70,17 @@ defmodule ExRedshiftProxy.Server do
     %MessagesHelper.Message{
       type: type,
       length: header_length + body_length,
-      body: String.chunk(body, :printable),
+      body: body,
       header: header,
     }
+
+    # Redirect message to Postgres connection
+    :ok = :gen_tcp.send(destination, header <> body)
 
     other
   end
 
-  defp handle_message(buffer, _, _, _), do: buffer
+  defp handle_message(buffer, _, _, _, _), do: buffer
 
   defp receive_data(socket) do
     receive do
