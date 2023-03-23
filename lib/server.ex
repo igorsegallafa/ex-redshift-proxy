@@ -1,9 +1,11 @@
 defmodule ExRedshiftProxy.Server do
   require Logger
 
+  alias ExRedshiftProxy.MessagesHelper
+
   def listen(port) do
     {:ok, socket} =
-      :gen_tcp.listen(port, [:binary, active: false, reuseaddr: true, packet: 0, nodelay: true])
+      :gen_tcp.listen(port, [:binary, active: true, reuseaddr: true, packet: 0, nodelay: true])
 
     Logger.info("Listening to 0.0.0.0:#{port}")
 
@@ -15,11 +17,11 @@ defmodule ExRedshiftProxy.Server do
     {:ok, client} = :gen_tcp.accept(socket)
 
     {:ok, pg_socket} =
-      :gen_tcp.connect('0.0.0.0', 5432, [:binary, active: false, packet: 0, nodelay: true])
+      :gen_tcp.connect('0.0.0.0', 5432, [:binary, active: true, packet: 0, nodelay: true])
 
     {:ok, pid} =
       Task.Supervisor.start_child(ExRedshiftProxy.TaskSupervisor, fn ->
-        serve(client, pg_socket)
+        serve_upstream(client, pg_socket)
       end)
 
     # Assign process responsible to receive the data from socket
@@ -27,7 +29,7 @@ defmodule ExRedshiftProxy.Server do
 
     {:ok, pid_postgres} =
       Task.Supervisor.start_child(ExRedshiftProxy.TaskSupervisor, fn ->
-        serve(pg_socket, client)
+        serve_downstream(pg_socket, client)
       end)
 
     # Assign process responsible to receive the data from socket
@@ -36,20 +38,52 @@ defmodule ExRedshiftProxy.Server do
     accept(socket)
   end
 
-  defp serve(source, destination, buffer \\ <<>>) do
-    # Receive message from source socket until doesn't have any packet to receive anymore
-    case :gen_tcp.recv(source, 0) do
-      {:ok, data} ->
-        # Redirect received data to destination socket
-        :gen_tcp.send(destination, data)
+  defp serve_upstream(source, destination, buffer \\ <<>>) do
+    data = source |> receive_data
+    buffer = handle_message_buffer(buffer <> data)
 
-        # Loop serve function to receive the rest of message
-        serve(source, destination, data <> buffer)
-      {:error, :closed} ->
-        # Entire message received, we can parse it
-        buffer
-      {:error, reason} ->
-        Logger.error("An error occurred while receiving socket message #{inspect reason}")
+    :ok = :gen_tcp.send(destination, data)
+
+    serve_upstream(source, destination, buffer)
+  end
+
+  defp serve_downstream(source, destination) do
+    data = source |> receive_data
+    :ok = :gen_tcp.send(destination, data)
+
+    serve_downstream(source, destination)
+  end
+
+  defp handle_message_buffer(buffer) when byte_size(buffer) >= 1 do
+    message_type = MessagesHelper.get_message_type(buffer)
+    message_length_info = MessagesHelper.get_message_length_by_type(message_type, buffer)
+
+    # Handle Message from Buffer
+    buffer |> handle_message(message_type, message_length_info.header_length, message_length_info.body_length)
+  end
+
+  defp handle_message_buffer(buffer), do: buffer
+
+  defp handle_message(buffer, type, header_length, body_length) when byte_size(buffer) >= header_length + body_length do
+    <<header::binary-size(header_length), rest::binary>> = buffer
+    <<body::binary-size(body_length), other::binary>> = rest
+
+    # Entire message buffer was received, we can handle it
+    %MessagesHelper.Message{
+      type: type,
+      length: header_length + body_length,
+      body: String.chunk(body, :printable),
+      header: header,
+    }
+
+    other
+  end
+
+  defp handle_message(buffer, _, _, _), do: buffer
+
+  defp receive_data(socket) do
+    receive do
+      {:tcp, ^socket, data} -> data
     end
   end
 end
