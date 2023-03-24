@@ -94,6 +94,7 @@ defmodule ExRedshiftProxy.MessagesHelper do
   def prepare_message_buffer(message = %Message{type: message_type}) when message_type not in [:undefined, :notice_response] do
     message_type_value = get_message_type_value(message_type)
 
+    message = process_message(message)
     length = byte_size(message.body) + message.header_length - 1
 
     header = <<message_type_value::size(8), length::size(32)>>
@@ -101,4 +102,18 @@ defmodule ExRedshiftProxy.MessagesHelper do
   end
 
   def prepare_message_buffer(%Message{body: body, header: header}), do: header <> body
+
+  # TODO: Create a module to intercept and handle messages
+  defp process_message(message = %Message{type: :query}) do
+    query = String.chunk(message.body, :printable) |> hd()
+    body =
+      case query do
+        <<0>> -> query
+        _ -> String.replace(query, "1000", "50") <> <<0>>
+      end
+
+    %Message{message | body: body, body_length: byte_size(body)}
+  end
+
+  defp process_message(message = %Message{}), do: message
 end
