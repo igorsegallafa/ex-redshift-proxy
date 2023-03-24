@@ -67,15 +67,17 @@ defmodule ExRedshiftProxy.Server do
     <<body::binary-size(body_length), other::binary>> = rest
 
     # Entire message buffer was received, we can handle it
-    %MessagesHelper.Message{
-      type: type,
-      length: header_length + body_length,
-      body: body,
-      header: header,
-    }
+    send_buffer =
+      %MessagesHelper.Message{
+        type: type,
+        body_length: body_length,
+        body: body,
+        header: header,
+        header_length: header_length
+      } |> MessagesHelper.prepare_message_buffer()
 
     # Redirect message to Postgres connection
-    :ok = :gen_tcp.send(destination, header <> body)
+    :ok = :gen_tcp.send(destination, send_buffer)
 
     other
   end

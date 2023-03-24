@@ -13,7 +13,8 @@ defmodule ExRedshiftProxy.MessagesHelper do
   defmodule Message do
     defstruct [
       :type,
-      :length,
+      :body_length,
+      :header_length,
       :header,
       :body,
     ]
@@ -56,6 +57,12 @@ defmodule ExRedshiftProxy.MessagesHelper do
     @messages_type |> Map.get(type, :undefined)
   end
 
+  def get_message_type_value(type) do
+    @messages_type
+    |> Enum.find(fn {_k, v} -> v == type end)
+    |> elem(0)
+  end
+
   def get_message_length_by_type(:undefined, buffer) when byte_size(buffer) >= 4 do
     <<body_length::binary-size(4), _rest::binary>> = buffer
 
@@ -83,4 +90,15 @@ defmodule ExRedshiftProxy.MessagesHelper do
   end
 
   def get_message_length_by_type(_, _), do: :undefined
+
+  def prepare_message_buffer(message = %Message{type: message_type}) when message_type not in [:undefined, :notice_response] do
+    message_type_value = get_message_type_value(message_type)
+
+    length = byte_size(message.body) + message.header_length - 1
+
+    header = <<message_type_value::size(8), length::size(32)>>
+    header <> message.body
+  end
+
+  def prepare_message_buffer(%Message{body: body, header: header}), do: header <> body
 end
