@@ -46,8 +46,9 @@ defmodule ExRedshiftProxy.Server do
   end
 
   defp serve_downstream(source, destination) do
-    data = source |> receive_data
-    :ok = :gen_tcp.send(destination, data)
+    source
+    |> receive_data
+    |> send_data(destination)
 
     serve_downstream(source, destination)
   end
@@ -87,6 +88,14 @@ defmodule ExRedshiftProxy.Server do
   defp receive_data(socket) do
     receive do
       {:tcp, ^socket, data} -> data
+    after
+      0 -> <<>> # Nothing was received, returns an empty buffer
     end
   end
+
+  defp send_data(buffer, socket) when byte_size(buffer) > 0 do
+    :ok = :gen_tcp.send(socket, buffer)
+  end
+
+  defp send_data(_, _), do: :no_data
 end
