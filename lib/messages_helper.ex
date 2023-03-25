@@ -106,12 +106,20 @@ defmodule ExRedshiftProxy.MessagesHelper do
   def prepare_message_buffer(%Message{body: body, header: header}), do: header <> body
 
   defp process_message(message = %Message{type: :query}) do
-    query = String.chunk(message.body, :printable) |> hd()
-    body =
-      case query do
-        <<0>> -> query
-        _ -> QueryInterceptor.handle_query(query) <> <<0>>
-      end
+    query = QueryInterceptor.handle_query(message.body)
+
+    %Message{message | body: query, body_length: byte_size(query)}
+  end
+
+  defp process_message(message = %Message{body: buffer, type: :parse}) do
+    query_length = message.body_length - 3 # Body Length - Statement - Params
+
+    <<statement::binary-size(1), rest::binary>> = buffer
+    <<query::binary-size(query_length), params::binary>> = rest
+    <<params::binary-size(2)>> = params
+
+    query = QueryInterceptor.handle_query(query)
+    body = statement <> query <> params
 
     %Message{message | body: body, body_length: byte_size(body)}
   end
