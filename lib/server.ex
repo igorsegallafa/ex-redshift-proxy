@@ -89,7 +89,7 @@ defmodule ExRedshiftProxy.Server do
     receive do
       {:tcp, ^socket, data} -> data
     after
-      0 -> <<>> # Nothing was received, returns an empty buffer
+      100 -> <<>> # Nothing was received, returns an empty buffer
     end
   end
 
