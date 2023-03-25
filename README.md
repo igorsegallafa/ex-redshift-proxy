@@ -1,21 +1,6 @@
 # ExRedshiftProxy
 
-**TODO: Add description**
+## References
 
-## Installation
-
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `ex_redshift_proxy` to your list of dependencies in `mix.exs`:
-
-```elixir
-def deps do
-  [
-    {:ex_redshift_proxy, "~> 0.1.0"}
-  ]
-end
-```
-
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/ex_redshift_proxy>.
-
+- Postgresql Proxy (https://github.com/kfzteile24/postgresql-proxy)
+- Build a Postgres Proxy in Elixir using Pattern Matching (https://docs.statetrace.com/blog/build-a-postgres-proxy)
