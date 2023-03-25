@@ -1,4 +1,6 @@
 defmodule ExRedshiftProxy.MessagesHelper do
+  alias ExRedshiftProxy.QueryInterceptor
+
   # References:
   # https://github.com/kfzteile24/postgresql-proxy
   # https://docs.statetrace.com/blog/build-a-postgres-proxy/
@@ -103,13 +105,12 @@ defmodule ExRedshiftProxy.MessagesHelper do
 
   def prepare_message_buffer(%Message{body: body, header: header}), do: header <> body
 
-  # TODO: Create a module to intercept and handle messages
   defp process_message(message = %Message{type: :query}) do
     query = String.chunk(message.body, :printable) |> hd()
     body =
       case query do
         <<0>> -> query
-        _ -> String.replace(query, "1000", "50") <> <<0>>
+        _ -> QueryInterceptor.handle_query(query) <> <<0>>
       end
 
     %Message{message | body: body, body_length: byte_size(body)}
