@@ -5,7 +5,7 @@ defmodule ExRedshiftProxy.Server do
 
   def listen(port) do
     {:ok, socket} =
-      :gen_tcp.listen(port, [:binary, active: true, reuseaddr: true, packet: 0, nodelay: true])
+      :gen_tcp.listen(port, [:binary, ip: {0,0,0,0}, active: true, reuseaddr: true, packet: 0, nodelay: true])
 
     Logger.info("Listening to 0.0.0.0:#{port}")
 
